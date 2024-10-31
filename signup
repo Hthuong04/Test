@@ -1,0 +1,96 @@
+package com.example.recipe_app.Controller;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.recipe_app.Model.User;
+import com.google.firebase.auth.FirebaseAuth;
+import com.example.recipe_app.R;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+public class Sign_up extends AppCompatActivity {
+    private EditText nameEditText, emailEditText, passwordEditText;
+    private Button registerButton;
+    TextView btnback1;
+    private FirebaseAuth auth;
+    private DatabaseReference databaseRef;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.sign_up);
+
+        auth = FirebaseAuth.getInstance();
+        databaseRef = FirebaseDatabase.getInstance().getReference("Users");
+
+        nameEditText = findViewById(R.id.et_name);
+        emailEditText = findViewById(R.id.et_email);
+        passwordEditText = findViewById(R.id.et_password);
+        registerButton = findViewById(R.id.btn_register);
+
+        registerButton.setOnClickListener(v -> registerUser());
+
+        btnback1 = findViewById(R.id.Sign_in_by_acc);
+        btnback1.setOnClickListener(view -> startActivity(new Intent(Sign_up.this, Sign_in.class)));
+    }
+
+    private void registerUser() {
+        String email = emailEditText.getText().toString();
+        String password = passwordEditText.getText().toString();
+        String name = nameEditText.getText().toString();
+
+        if (password.length() < 6) {
+            Toast.makeText(this, "Password should be at least 6 characters.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Lấy số lượng người dùng hiện tại từ bảng User để tạo ID tùy chỉnh
+        databaseRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                // Đếm số lượng người dùng hiện tại
+                int userCount = (int) snapshot.getChildrenCount();
+                // Tạo ID mới với định dạng "US01", "US02", ...
+                String customUserId = "US" + String.format("%02d", userCount + 1);
+
+                // Đăng ký người dùng với Firebase Authentication
+                auth.createUserWithEmailAndPassword(email, password)
+                        .addOnCompleteListener(Sign_up.this, task -> {
+                            if (task.isSuccessful()) {
+                                // Đăng ký thành công, tạo đối tượng người dùng và lưu vào Firebase Database với ID tùy chỉnh
+                                User newUser = new User(name, email);
+                                databaseRef.child(customUserId).setValue(newUser)
+                                        .addOnCompleteListener(task1 -> {
+                                            if (task1.isSuccessful()) {
+                                                Toast.makeText(Sign_up.this, "Registration successful.", Toast.LENGTH_SHORT).show();
+                                                startActivity(new Intent(Sign_up.this, Sign_in.class)); // Điều hướng đến màn hình đăng nhập
+                                                finish();
+                                                // Tăng giá trị `userCount` cho người dùng tiếp theo (tuỳ chọn)
+                                            } else {
+                                                Toast.makeText(Sign_up.this, "Failed to save user info.", Toast.LENGTH_SHORT).show();
+                                            }
+                                        });
+                            } else {
+                                Toast.makeText(Sign_up.this, "Registration failed: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Log.e("Firebase", "Failed to read user count.", error.toException());
+            }
+        });
+    }
+}
