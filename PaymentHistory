@@ -1,0 +1,181 @@
+@model List<webCore.Models.Order>
+
+@{
+    Layout = "_Layout";
+
+    var statuses = new List<string> {
+        "Tất cả", "Chờ xác nhận", "Chờ vận chuyển", "Chờ giao hàng",
+        "Đã giao", "Đã hủy", "Trả hàng"
+    };
+
+    string currentStatus = ViewBag.CurrentStatus ?? "Tất cả";
+}
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lịch sử Thanh Toán</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/PaymentHistory.css" />
+</head>
+
+<body>
+
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <div class="cart-title">
+                <h2 class="title">LỊCH SỬ THANH TOÁN</h2>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ================== FILTER TRẠNG THÁI ================== -->
+    <div class="d-flex flex-wrap justify-content-center mb-4 status-filter">
+        @foreach (var s in statuses)
+        {
+            <a href="@Url.Action("PaymentHistory", "Checkout", new { status = s == "Tất cả" ? null : s })"
+               class="btn btn-outline-secondary btn-sm @(s == currentStatus ? "active" : "")">
+                @s
+            </a>
+        }
+    </div>
+
+
+    <!-- ================== ORDERS LIST ================== -->
+    <div id="orders-container">
+
+        @if (Model == null || !Model.Any())
+        {
+            <div class="text-center text-muted mt-5">
+                <h5>Không có đơn hàng nào</h5>
+            </div>
+        }
+        else
+        {
+            @foreach (var order in Model)
+            {
+                <div class="order-card border p-4 mb-4 shadow-sm" data-status="@order.Status">
+
+                    <!-- Header -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Mã đơn:</strong> @order.Id.ToString() <br />
+                            <small>Ngày đặt: @order.CreatedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                        </div>
+
+                        <span class="badge
+                            @(order.Status == "Chờ xác nhận" ? "badge-warning" :
+                              order.Status == "Chờ vận chuyển" ? "badge-info" :
+                              order.Status == "Chờ giao hàng" ? "badge-primary" :
+                              order.Status == "Đã giao" ? "badge-success" :
+                              order.Status == "Đã hủy" ? "badge-danger" :
+                              order.Status == "Trả hàng" ? "badge-secondary" :
+                              "badge-dark")">
+                            @order.Status
+                        </span>
+                    </div>
+
+                    <hr />
+
+
+                    <!-- ================== ITEMS ================== -->
+                    @foreach (var item in order.Items)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+
+                            <div class="d-flex align-items-center">
+                                <img src="@item.Image"
+                                     style="width:65px;height:65px;border-radius:8px;margin-right:12px;" />
+
+                                <div>
+                                    <strong>@item.Title</strong><br />
+                                    <small>Giá: @item.Price.ToString("N0")đ | SL: @item.Quantity</small><br />
+
+                                    @if (item.DiscountPercentage > 0)
+                                    {
+                                        <small class="text-success">Giảm: @item.DiscountPercentage%</small>
+                                    }
+                                </div>
+                            </div>
+
+                        </div>
+                    }
+
+                    <hr />
+
+
+                    <!-- ================== FOOTER – TOTAL ================== -->
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <div><strong>Tổng tiền:</strong> @order.TotalAmount.ToString("N0")đ</div>
+                            <div><strong>Giảm giá:</strong> - @order.DiscountAmount.ToString("N0")đ</div>
+                            <div>
+                                <strong>Thanh toán:</strong>
+                                <span class="text-danger font-weight-bold">
+                                    @order.FinalAmount.ToString("N0")đ
+                                </span>
+                            </div>
+                        </div>
+
+
+                        <!-- ================== ACTION BY STATUS ================== -->
+                        <div>
+                            <a class="btn btn-sm btn-outline-primary">Xem Chi Tiết</a>
+
+                            @if (order.Status == "Chờ xác nhận")
+                            {
+                                <a class="btn btn-sm btn-outline-danger">Hủy đơn</a>
+                            }
+                            else if (order.Status == "Chờ vận chuyển")
+                            {
+                                <a class="btn btn-sm btn-outline-secondary">Liên hệ người bán</a>
+                            }
+                            else if (order.Status == "Chờ giao hàng")
+                            {
+                                <a class="btn btn-sm btn-outline-success">Xác nhận đã giao</a>
+                                <a class="btn btn-sm btn-outline-secondary">Liên hệ người bán</a>
+                            }
+                            else if (order.Status == "Đã giao")
+                            {
+                                @foreach (var item in order.Items)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary btnReview"
+                                       data-order-id="@order.Id.ToString()"
+                                       data-product-title="@item.Title"
+                                       data-product-price="@item.Price"
+                                       data-product-image="@item.Image"
+                                       data-quantity="@item.Quantity"
+                                       data-total="@order.FinalAmount">
+                                        Đánh giá
+                                    </a>
+                                }
+
+                                <a class="btn btn-sm btn-outline-danger">
+                                    Yêu cầu trả hàng
+                                </a>
+                            }
+                            else if (order.Status == "Đã hủy" || order.Status == "Trả hàng")
+                            {
+                                <a class="btn btn-sm btn-outline-success">Mua lại</a>
+                            }
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+        }
+    </div>
+</div>
+
+
+<script src="/js/PaymentHistory.js"></script>
+
+</body>
+</html>
