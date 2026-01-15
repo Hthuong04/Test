@@ -1,0 +1,112 @@
+# intent_analyzer.py
+import json
+import re
+from openai import OpenAI
+from app.core.config import settings
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+def extract_json(text: str) -> dict | None:
+    """
+    Trích JSON object đầu tiên trong text
+    """
+    match = re.search(r"\{.*\}", text, re.S)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group())
+    except json.JSONDecodeError:
+        return None
+
+
+def analyze_message(message: str) -> dict:
+    prompt = f"""
+Bạn là hệ thống phân tích câu hỏi cho website bán mỹ phẩm.
+
+Hãy trả về DUY NHẤT 1 JSON, KHÔNG giải thích, KHÔNG markdown.
+
+Schema:
+{{
+  "intent": "budget | category | product | general",
+  "budget": number hoặc null,
+  "category": string hoặc null,
+  "keywords": [string]
+}}
+
+Câu hỏi:
+"{message}"
+"""
+
+    res = client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt
+    )
+
+    text = res.output_text or ""
+
+    data = extract_json(text)
+
+    # 🔐 FALLBACK AN TOÀN
+    if not data:
+        return {
+            "intent": "general",
+            "budget": None,
+            "category": None,
+            "keywords": []
+        }
+
+    return data
+////
+
+  #response_generator.py
+  
+from openai import OpenAI
+from app.core.config import settings
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+def generate_response(message: str, products: list) -> str:
+    if not products:
+        prompt = f"""
+Bạn là chatbot tư vấn mỹ phẩm.
+
+Khách hỏi:
+"{message}"
+
+Yêu cầu:
+- Không nói shop không có sản phẩm
+- Hỏi lại nhu cầu cụ thể
+- Gợi ý nhẹ nhàng
+"""
+        res = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt
+        )
+        return res.output_text
+
+    product_context = "\n".join([
+        f"- {p.name} | Giá: {int(p.price):,}đ | Thương hiệu: {p.brand or 'Không rõ'}"
+        for p in products
+    ])
+
+    prompt = f"""
+Bạn là chatbot tư vấn cho website bán mỹ phẩm.
+
+Khách hỏi:
+"{message}"
+
+Danh sách sản phẩm phù hợp:
+{product_context}
+
+Yêu cầu:
+- Liệt kê nhiều sản phẩm
+- Ưu tiên sản phẩm phù hợp nhất
+- Không bịa thông tin
+- Giữ giọng tư vấn thân thiện
+"""
+
+    res = client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt
+    )
+    return res.output_text
